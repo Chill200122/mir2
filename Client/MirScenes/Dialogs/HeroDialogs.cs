@@ -1,7 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-using Client.MirControls;
+﻿using Client.MirControls;
 using Client.MirGraphics;
 using Client.MirNetwork;
 using Client.MirSounds;
@@ -467,7 +464,7 @@ namespace Client.MirScenes.Dialogs
     public sealed class HeroInfoPanel : MirImageControl
     {
         private MirImageControl Avatar, NameContainer, HealthContainer, HealthBar, ManaBar, ExperienceBar, DangerAvatar, DeadAvatar;
-        private MirLabel NameLabel, LevelLabel;
+        private MirLabel NameLabel, LevelLabel, Hplabel, Mplabel, ExLabel;
         private DateTime NextAvatarChange;
         private HeroAutoPotPreview HPItem, MPItem;
 
@@ -562,7 +559,15 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true
             };
             HealthBar.BeforeDraw += HealthBar_BeforeDraw;
+            Hplabel = new MirLabel
+            {
+                AutoSize = false,
+                Size = new Size(55, 18),
+                Location = new Point(75, 28),
+                DrawFormat = TextFormatFlags.HorizontalCenter,
+                Parent = this,
 
+            };
             ManaBar = new MirImageControl
             {
                 Index = 1952,
@@ -574,7 +579,14 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true
             };
             ManaBar.BeforeDraw += ManaBar_BeforeDraw;
-
+            Mplabel = new MirLabel
+            {
+                AutoSize = false,
+                Size = new Size(55, 18),
+                Location = new Point(75, 41),
+                DrawFormat = TextFormatFlags.HorizontalCenter,
+                Parent = this,
+            }; 
             ExperienceBar = new MirImageControl
             {
                 Index = 1953,
@@ -586,7 +598,14 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true
             };
             ExperienceBar.BeforeDraw += ExperienceBar_BeforeDraw;
-
+            ExLabel = new MirLabel
+            {
+                AutoSize = false,
+                Size = new Size(55, 18),
+                Location = new Point(72, 54),
+                DrawFormat = TextFormatFlags.HorizontalCenter,
+                Parent = this,
+            };
             HPItem = new HeroAutoPotPreview()
             {
                 Parent = this,
@@ -638,6 +657,7 @@ namespace Client.MirScenes.Dialogs
             };
 
             ExperienceBar.Library.Draw(ExperienceBar.Index, section, ExperienceBar.DisplayLocation, Color.White, false);
+            ExLabel.Text = string.Format("{0:F2}%", percent);
         }
 
         private void HealthBar_BeforeDraw(object sender, EventArgs e)
@@ -654,6 +674,7 @@ namespace Client.MirScenes.Dialogs
             };
 
             HealthBar.Library.Draw(HealthBar.Index, section, HealthBar.DisplayLocation, Color.White, false);
+            Hplabel.Text = GameScene.Hero?.HP.ToString() + "/" + GameScene.Hero?.Stats[Stat.HP].ToString();
         }
 
         private void ManaBar_BeforeDraw(object sender, EventArgs e)
@@ -670,6 +691,7 @@ namespace Client.MirScenes.Dialogs
             };
 
             ManaBar.Library.Draw(ManaBar.Index, section, ManaBar.DisplayLocation, Color.White, false);
+            Mplabel.Text = GameScene.Hero?.MP.ToString() + "/" + GameScene.Hero?.Stats[Stat.MP].ToString();
         }
     }
     public sealed class HeroAutoPotPreview : MirImageControl

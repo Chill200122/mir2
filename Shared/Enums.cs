@@ -1,6 +1,4 @@
-﻿using System;
-
-public enum MouseCursor : byte
+﻿public enum MouseCursor : byte
 {
     None,
     Default,
@@ -1198,6 +1196,7 @@ public enum Spell : byte
     Hemorrhage = 104,
     CrescentSlash = 105,
     MoonMist = 106,
+    CatTongue = 107,
 
     //Archer
     Focus = 121,
@@ -1286,7 +1285,8 @@ public enum SpellEffect : byte
     DeathCrawlerBreath,
     FlamingMutantWeb,
     FurbolgWarriorCritical,
-    Tester    
+    Tester,
+    MoonMist
 }
 
 

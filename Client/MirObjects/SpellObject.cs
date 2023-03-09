@@ -1,9 +1,6 @@
 ﻿using Client.MirGraphics;
 using Client.MirScenes;
 using Client.MirSounds;
-using System;
-using System.Drawing;
-using System.Linq;
 using S = ServerPackets;
 
 namespace Client.MirObjects
@@ -229,6 +226,14 @@ namespace Client.MirObjects
                     DrawFrame = 2360;
                     FrameInterval = 100;
                     FrameCount = 8;
+                    Blend = true;
+                    break;
+                case Spell.HealingCircle:
+                    BodyLibrary = Libraries.Magic3;
+                    DrawFrame = 630;
+                    FrameInterval = 80;
+                    FrameCount = 11;
+                    Light = 3;
                     Blend = true;
                     break;
                 case Spell.FlyingStatueIceTornado:

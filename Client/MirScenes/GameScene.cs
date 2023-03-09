@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
-using Client.MirControls;
+﻿using Client.MirControls;
 using Client.MirGraphics;
 using Client.MirNetwork;
 using Client.MirObjects;
@@ -19,7 +11,6 @@ using C = ClientPackets;
 using Effect = Client.MirObjects.Effect;
 
 using Client.MirScenes.Dialogs;
-using System.Drawing.Imaging;
 using Client.Utils;
 
 namespace Client.MirScenes
@@ -2545,8 +2536,6 @@ namespace Client.MirScenes
             MirItemCell fromCell;
             MirItemCell toCell;
 
-            int index = -1;
-
             switch (p.Grid)
             {
                 case MirGridType.Socket:
@@ -3459,7 +3448,6 @@ namespace Client.MirScenes
 
             Hero.PercentHealth = (byte)(Hero.HP / (float)Hero.Stats[Stat.HP] * 100);
             Hero.PercentMana = (byte)(Hero.MP / (float)Hero.Stats[Stat.MP] * 100);
-            int g = 0;
         }
 
         private void DeleteQuestItem(S.DeleteQuestItem p)
@@ -4627,7 +4615,6 @@ namespace Client.MirScenes
                 MapObject ob = MapControl.Objects[i];
                 if (ob.ObjectID != p.ObjectID) continue;
                 PlayerObject player;
-                MonsterObject monster;
 
                 switch (p.Effect)
                 {
@@ -4832,6 +4819,9 @@ namespace Client.MirScenes
                         break;
                     case SpellEffect.DeathCrawlerBreath:
                         ob.Effects.Add(new Effect(Libraries.Monsters[(ushort)Monster.DeathCrawler], 272 + ((int)ob.Direction * 4), 4, 400, ob) { Blend = true });
+                        break;
+                    case SpellEffect.MoonMist:
+                        ob.Effects.Add(new Effect(Libraries.Magic3, 705, 10, 800, ob));
                         break;
                 }
 
@@ -11780,6 +11770,19 @@ namespace Client.MirScenes
                     if (target == null) target = MapObject.MagicObject;
 
                     if (target != null && target.Race == ObjectType.Monster) MapObject.MagicObjectID = target.ObjectID;
+                    break;
+                case Spell.Stonetrap:
+                    if (!User.HasClassWeapon)
+                    {
+                        GameScene.Scene.OutputMessage("You must be wearing a bow to perform this skill.");
+                        User.ClearMagic();
+                        return;
+                    }
+                    if (User.NextMagicObject != null)
+                    {
+                        if (!User.NextMagicObject.Dead && User.NextMagicObject.Race != ObjectType.Item && User.NextMagicObject.Race != ObjectType.Merchant)
+                            target = User.NextMagicObject;
+                    }
 
                     //if(magic.Spell == Spell.ElementalShot)
                     //{
@@ -11813,6 +11816,8 @@ namespace Client.MirScenes
                 case Spell.MassHiding:
                 case Spell.FireWall:
                 case Spell.TrapHexagon:
+                case Spell.HealingCircle:
+                case Spell.CatTongue:
                     if (actor.NextMagicObject != null)
                     {
                         if (!actor.NextMagicObject.Dead && actor.NextMagicObject.Race != ObjectType.Item && actor.NextMagicObject.Race != ObjectType.Merchant)
