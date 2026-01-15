@@ -9,7 +9,21 @@
     Trash,
     Upgrade
 }
-
+//[Flags]
+public enum WeatherSetting : ushort
+{
+    None = 0,
+    Fog = 1,
+    RedEmber = 2,
+    WhiteEmber = 4,
+    YellowEmber = 8,
+    FireParticle = 16,
+    Snow = 32,
+    Rain = 64,
+    Leaves = 128,
+    FireyLeaves = 256,
+    PurpleLeaves = 512,
+}
 public enum PanelType : byte
 {
     Buy,
@@ -44,6 +58,13 @@ public enum MarketPanelType : byte
     GameShop
 }
 
+public enum MarketPriceFilter : byte
+{
+    Normal,
+    High,
+    Low
+}
+
 public enum BlendMode : sbyte
 {
     NONE = -1,
@@ -62,6 +83,14 @@ public enum DamageType : byte
     Hit = 0,
     Miss = 1,
     Critical = 2
+}
+
+public enum MonsterType : byte
+{
+    Normal = 0,
+    Uncommon = 1,
+    Rare = 2,
+    Elite = 3
 }
 
 [Flags]
@@ -85,12 +114,18 @@ public enum AwakeType : byte
 }
 
 [Flags]
-public enum LevelEffects : byte
+public enum LevelEffects : ushort
 {
     None = 0,
-    Mist = 0x0001,
-    RedDragon = 0x0002,
-    BlueDragon = 0x0004
+    Mist = 1,
+    RedDragon = 2,
+    BlueDragon = 4,
+    Rebirth1 = 8,
+    Rebirth2 = 16,
+    Rebirth3 = 32,
+    NewBlue = 64,
+    YellowDragon = 128,
+    Phoenix = 256
 }
 
 public enum OutputMessageType : byte
@@ -369,7 +404,7 @@ public enum Monster : ushort
     SiegeRepairman = 175, //SPECIAL TODO
     BlueSanta = 176,
     BattleStandard = 177,
-    Blank1 = 178,
+    WingedBullLord = 178,
     RedYimoogi = 179,
     LionRiderMale = 180, //Not Monster - Skin / Transform
     LionRiderFemale = 181, //Not Monster - Skin / Transform
@@ -968,6 +1003,7 @@ public enum PetMode : byte
     MoveOnly = 1,
     AttackOnly = 2,
     None = 3,
+    FocusMasterTarget = 4
 }
 
 [Flags]
@@ -1347,6 +1383,7 @@ public enum BuffType : byte
     Rested,
     Skill,
     ClearRing,
+    Newbie,
 
     //Stats
     Impact = 200,
@@ -1429,6 +1466,8 @@ public enum ServerPacketIds : short
     Chat,
     ObjectChat,
     NewItemInfo,
+    NewMonsterInfo,
+    NewNPCInfo,
     NewHeroInfo,
     NewChatItem,
     MoveItem,
@@ -1670,6 +1709,7 @@ public enum ServerPacketIds : short
     SetCompass,
     GroupMembersMap,
     SendMemberLocation,
+    GuildTerritoryPage,
 }
 
 public enum ClientPacketIds : short
@@ -1711,6 +1751,9 @@ public enum ClientPacketIds : short
     DropGold,
     PickUp,
     RequestMapInfo,
+    RequestMonsterInfo,
+    RequestNPCInfo,
+    RequestItemInfo,
     TeleportToNPC,
     SearchMap,
     Inspect,
@@ -1824,7 +1867,10 @@ public enum ClientPacketIds : short
     CancelItemRental,
     ItemRentalLockFee,
     ItemRentalLockItem,
-    ConfirmItemRental
+    ConfirmItemRental,
+    GuildTerritoryPage,
+    PurchaseGuildTerritory,
+    DeleteItem,
 }
 
 public enum ConquestType : byte
@@ -1891,4 +1937,11 @@ public enum SpellToggleState: sbyte
     None = -1,
     False = 0,
     True = 1
+}
+
+public enum MarketCollectionMode : byte
+{
+    Any = 0,
+    Sold = 1,
+    Expired = 2
 }

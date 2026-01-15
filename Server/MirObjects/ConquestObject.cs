@@ -1,3 +1,4 @@
+using System.Drawing;
 ﻿using Server.MirEnvir;
 using Server.MirDatabase;
 
@@ -549,7 +550,7 @@ namespace Server.MirObjects
 
         public void TakeConquest(PlayerObject player = null, GuildObject winningGuild = null)
         {
-            if (winningGuild == null && (player == null || player.MyGuild == null || player.MyGuild.Conquest != null)) return;
+            if (winningGuild == null && (player == null || player.MyGuild == null || player.MyGuild.Conquest != null || player.Dead)) return;
             if (winningGuild != null && winningGuild.Conquest != null) return;
             if (player != null && player.MyGuild != null && player.MyGuild.Conquest != null) return;
 
@@ -558,7 +559,6 @@ namespace Server.MirObjects
             switch (GameType)
             {
                 case ConquestGame.CapturePalace:
-                    if (player == null) return;
                     if (StartType == ConquestType.Request)
                         if (player.MyGuild.Guildindex != GuildInfo.AttackerID) break;
 
@@ -591,6 +591,12 @@ namespace Server.MirObjects
                     Guild.Conquest = this;
                     break;
                 case ConquestGame.ControlPoints:
+
+                    if (Guild != null)
+                    {
+                        tmpPrevious = Guild;
+                    }
+
                     GuildInfo.Owner = winningGuild.Guildindex;
                     Guild = winningGuild;
                     Guild.Conquest = this;
@@ -612,10 +618,15 @@ namespace Server.MirObjects
                 FlagList[i].UpdateColour();
             }
 
-            if (Guild != null)
+            if (Guild != null &&
+                (tmpPrevious == null || Guild != tmpPrevious))
             {
                 UpdatePlayers(Guild);
-                if (tmpPrevious != null) UpdatePlayers(tmpPrevious);
+                if (tmpPrevious != null)
+                {
+                    tmpPrevious.Conquest = null;
+                    UpdatePlayers(tmpPrevious);
+                }
                 GuildInfo.NeedSave = true;
             }
         }
@@ -733,12 +744,12 @@ namespace Server.MirObjects
                                 if (points == 0)
                                 {
                                     controlFlagPoints[ConquestMap.Players[i].MyGuild] = 1;
-                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(string.Format("Gaining control of {1} {0:P0}", ((double)controlFlagPoints[ConquestMap.Players[i].MyGuild] / MAX_CONTROL_POINTS), controlFlag.Info.Name));
+                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.GainingControlOf), ((double)controlFlagPoints[ConquestMap.Players[i].MyGuild] / MAX_CONTROL_POINTS), controlFlag.Info.Name));
                                 }
                                 else if (points < MAX_CONTROL_POINTS)
                                 {
                                     controlFlagPoints[ConquestMap.Players[i].MyGuild] += 1;
-                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(string.Format("Gaining control of {1} {0:P0}", ((double)controlFlagPoints[ConquestMap.Players[i].MyGuild] / MAX_CONTROL_POINTS), controlFlag.Info.Name));
+                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.GainingControlOf), ((double)controlFlagPoints[ConquestMap.Players[i].MyGuild] / MAX_CONTROL_POINTS), controlFlag.Info.Name));
                                 }
 
                                 List<GuildObject> guilds = controlFlagPoints.Keys.ToList();
@@ -780,7 +791,7 @@ namespace Server.MirObjects
 
                                     for (int j = 0; j < ConquestMap.Players.Count; j++)
                                     {
-                                        ConquestMap.Players[j].ReceiveChat(string.Format("{0} has captured {1} at {2}", tempWinning.Name, controlFlag.Info.Name, Info.Name), ChatType.System);
+                                        ConquestMap.Players[j].ReceiveChat(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.PlayerCapturedFlagAtLocation), tempWinning.Name, controlFlag.Info.Name, Info.Name), ChatType.System);
                                     }
                                 }
                             }
@@ -804,12 +815,12 @@ namespace Server.MirObjects
                                 if (points == 0)
                                 {
                                     KingPoints[ConquestMap.Players[i].MyGuild] = 1;
-                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(string.Format("Gaining control of {1} {0:P0}", ((double)KingPoints[ConquestMap.Players[i].MyGuild] / MAX_KING_POINTS), Info.Name));
+                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.GainingControlOfGuild), ((double)KingPoints[ConquestMap.Players[i].MyGuild] / MAX_KING_POINTS), Info.Name));
                                 }
                                 else if (points < MAX_KING_POINTS)
                                 {
                                     KingPoints[ConquestMap.Players[i].MyGuild] += 1;
-                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(string.Format("Gaining control of {1} {0:P0}", ((double)KingPoints[ConquestMap.Players[i].MyGuild] / MAX_KING_POINTS), Info.Name));
+                                    ConquestMap.Players[i].MyGuild.SendOutputMessage(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.GainingControlOfGuild), ((double)KingPoints[ConquestMap.Players[i].MyGuild] / MAX_KING_POINTS), Info.Name));
                                 }
 
                                 List<GuildObject> guilds = KingPoints.Keys.ToList();
@@ -820,7 +831,7 @@ namespace Server.MirObjects
                                     if (KingPoints[guild] > 0)
                                     {
                                         KingPoints[guild] -= 1;
-                                        guild.SendOutputMessage(string.Format("Losing control of {1} {0:P0}", ((double)KingPoints[guild] / MAX_KING_POINTS), Info.Name));
+                                        guild.SendOutputMessage(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.LosingControlOf), ((double)KingPoints[guild] / MAX_KING_POINTS), Info.Name));
                                     }
                                 }
 
@@ -853,7 +864,7 @@ namespace Server.MirObjects
 
                                 for (int j = 0; j < ConquestMap.Players.Count; j++)
                                 {
-                                    ConquestMap.Players[j].ReceiveChat(string.Format("{0} has captured the hill", tempWinning.Name), ChatType.System);
+                                    ConquestMap.Players[j].ReceiveChat(GameLanguage.ServerTextMap.GetLocalization((ServerTextKeys.PlayerHasCapturedHill), tempWinning.Name), ChatType.System);
                                 }
                             }
                         }
@@ -942,7 +953,7 @@ namespace Server.MirObjects
 
                         if (count > tempInt)
                         {
-                            tempWinning = Envir.Guilds[i];
+                            tempWinning = guilds[i];
                         }
                     }
 

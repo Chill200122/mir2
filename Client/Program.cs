@@ -2,6 +2,7 @@
 using Launcher;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using Client.Resolution;
 
 namespace Client
 {
@@ -11,6 +12,7 @@ namespace Client
         public static AMain PForm;
 
         public static bool Restart;
+        public static bool Launch;
 
         [STAThread]
         private static void Main(string[] args)
@@ -39,11 +41,18 @@ namespace Client
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
-                if (Settings.P_Patcher) Application.Run(PForm = new Launcher.AMain());
-                else Application.Run(Form = new CMain());
+                CheckResolutionSetting();
+
+                Launch = false;
+                if (Settings.P_Patcher)
+                    Application.Run(PForm = new AMain());
+                else
+                    Launch = true;
+
+                if (Launch)
+                    Application.Run(Form = new CMain());
 
                 Settings.Save();
-                CMain.InputKeys.Save();
 
                 if (Restart)
                 {
@@ -148,6 +157,27 @@ namespace Client
 
                 [MethodImpl(MethodImplOptions.InternalCall, MethodCodeType = MethodCodeType.Runtime)]
                 void BindAsLegacyV2Runtime();
+            }
+        }
+
+        public static void CheckResolutionSetting()
+        {
+            var parsedOK = DisplayResolutions.GetDisplayResolutions();
+            if (!parsedOK)
+            {
+                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.CouldNotGetDisplayResolutions), GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.GetDisplayResolutionIssue), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Environment.Exit(0);
+            }
+
+            if (!DisplayResolutions.IsSupported(Settings.Resolution))
+            {
+                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization((ClientTextKeys.ClientNotSupportSettingResolution), Settings.Resolution),
+                    GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.InvalidClientResolution),
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+
+                Settings.Resolution = (int)eSupportedResolution.w1024h768;
+                Settings.Save();
             }
         }
 

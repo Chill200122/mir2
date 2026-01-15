@@ -79,6 +79,31 @@ namespace Server.MirObjects
             LogMessage(message, source);
         }
 
+        public void ItemDeleted(UserItem item, uint amount, string info = "", [CallerMemberName] string source = "")
+        {
+            string message = $"Item Deleted - {item?.Info.Name} x{amount} ({item?.UniqueID}) {info}";
+            LogMessage(message, source);
+        }
+
+        public void ItemChangedHero(UserItem item, uint amount, int state, [CallerMemberName] string source = "")
+        {
+            string type = string.Empty;
+
+            switch (state)
+            {
+                case 1:
+                    type = "Lost";
+                    break;
+                case 2:
+                    type = "Gained";
+                    break;
+            }
+
+            string message = $"Item {type} - {item.Info.Name} x{amount} ({item.UniqueID})";
+
+            LogHeroMessage(message, source);
+        }
+
         public void ItemGSBought(GameShopItem item, uint amount, uint CreditCost, uint GoldCost, [CallerMemberName] string source = "")
         {
             string message = $"Purchased {item.Info.FriendlyName} x{amount} for {CreditCost} Credits and {GoldCost} Gold.";
@@ -190,6 +215,20 @@ namespace Server.MirObjects
             try
             {
                 var logMessage = $"{_player.Name} - {source} : {message}";
+
+                log.Info(logMessage);
+            }
+            catch (Exception ex)
+            {
+                MessageQueue.Enqueue(ex);
+            }
+        }
+
+        private void LogHeroMessage(string message, string source)
+        {
+            try
+            {
+                var logMessage = $"{_player.Name}[Hero] - {source} : {message}";
 
                 log.Info(logMessage);
             }

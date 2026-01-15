@@ -42,7 +42,7 @@ namespace Client.MirScenes.Dialogs
 
             PageLabel = new MirLabel
             {
-                Text = "Keyboard Settings",
+                Text = GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.KeyboardSettings),
                 Font = new Font(Settings.FontName, Settings.FontSize + 2, FontStyle.Bold),
                 DrawFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter,
                 Parent = this,
@@ -60,7 +60,12 @@ namespace Client.MirScenes.Dialogs
                 PressedIndex = 362,
                 Sound = SoundList.ButtonA,
             };
-            CloseButton.Click += (o, e) => Hide();
+
+            CloseButton.Click += (o, e) =>
+            {
+                CMain.InputKeys.Save(CMain.InputKeys.Keylist);
+                Hide();
+            };
 
             ScrollUpButton = new MirButton
             {
@@ -155,7 +160,7 @@ namespace Client.MirScenes.Dialogs
 
                 UpdateText();
 
-                MirMessageBox messageBox = new MirMessageBox("Keyboard settings have been reset back to default.", MirMessageBoxButtons.OK);
+                MirMessageBox messageBox = new MirMessageBox(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.KeyboardSettingsResetDefault), MirMessageBoxButtons.OK);
                 messageBox.Show();
             };
 
@@ -187,7 +192,7 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 Location = new Point(120, 404),
                 AutoSize = true,
-                Text = "Assign Rule: Strict"
+                Text = GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.AssignRuleStrict)
             };
 
             UpdateText();
@@ -199,8 +204,8 @@ namespace Client.MirScenes.Dialogs
 
             EnforceButtonChecked.Visible = Enforce;
 
-            if (Enforce) EnforceButtonLabel.Text = "Assign Rule: Strict";
-            else EnforceButtonLabel.Text = "Assign Rule: Relaxed";
+            if (Enforce) EnforceButtonLabel.Text = GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.AssignRuleStrict);
+            else EnforceButtonLabel.Text = GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.AssignRuleRelaxed);
         }
 
         public void UpdateText()

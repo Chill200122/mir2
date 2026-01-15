@@ -103,6 +103,18 @@
         RollYut,
         Drop,
         ReviveHero,
-        SealHero
+        SealHero,
+        DeleteHero,
+        ConquestRepairAll,
+        BuyGT,
+        TeleportGT,
+        ExtendGT,
+        GTAllRecall,
+        GTRecall,
+        DisplayGTRentalDays,
+        GTSale,
+        GTCancelSale,
+        HeroGiveSkill,
+        HeroRemoveSkill,
     }
 }

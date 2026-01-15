@@ -1,16 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Compression;
+﻿using System.Diagnostics;
 using System.Net;
-using System.Threading;
-using System.Windows.Forms;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using Client;
-using System.Linq;
 using Microsoft.Web.WebView2.Core;
+using System.Net.Http.Headers;
+using System.Net.Http.Handlers;
 using Client.Utils;
 
 namespace Launcher
@@ -21,7 +14,7 @@ namespace Launcher
         private int _fileCount, _currentCount;
 
         public bool Completed, Checked, CleanFiles, LabelSwitch, ErrorFound;
-        
+
         public List<FileInformation> OldList;
         public Queue<FileInformation> DownloadList = new Queue<FileInformation>();
         public List<Download> ActiveDownloads = new List<Download>();
@@ -69,7 +62,7 @@ namespace Launcher
 
                 if (OldList.Count == 0)
                 {
-                    MessageBox.Show(GameLanguage.PatchErr);
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.PatchErr));
                     Completed = true;
                     return;
                 }
@@ -82,7 +75,6 @@ namespace Launcher
                 _fileCount = 0;
                 _currentCount = 0;
 
-
                 _fileCount = DownloadList.Count;
 
                 ServicePointManager.DefaultConnectionLimit = Settings.P_Concurrency;
@@ -90,10 +82,12 @@ namespace Launcher
                 _stopwatch = Stopwatch.StartNew();
                 for (var i = 0; i < Settings.P_Concurrency; i++)
                     BeginDownload();
+
+
             }
             catch (EndOfStreamException ex)
             {
-                MessageBox.Show("End of stream found. Host is likely using a pre version 1.1.0.0 patch system");
+                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.EndStreamOldVersion));
                 Completed = true;
                 SaveError(ex.ToString());
             }
@@ -103,12 +97,12 @@ namespace Launcher
                 Completed = true;
                 SaveError(ex.ToString());
             }
+
+            _stopwatch.Stop();
         }
 
-        
-
         private void BeginDownload()
-        {           
+        {
             if (DownloadList.Count == 0)
             {
                 Completed = true;
@@ -119,9 +113,10 @@ namespace Launcher
 
             var download = new Download();
             download.Info = DownloadList.Dequeue();
+            DownloadFile(download);
 
-            Download(download);
         }
+
         private void CleanUp()
         {
             if (!CleanFiles) return;
@@ -141,7 +136,7 @@ namespace Launcher
                     if (!NeedFile(fileNames[i]))
                         File.Delete(fileNames[i]);
                 }
-                catch{}
+                catch { }
             }
         }
         public bool NeedFile(string fileName)
@@ -159,14 +154,18 @@ namespace Launcher
         {
             OldList = new List<FileInformation>();
 
-            //byte[] data = DownloadFile(PatchFileName);
             byte[] data = Download(Settings.P_PatchFileName);
-
             if (data != null)
             {
                 using MemoryStream stream = new MemoryStream(data);
                 using BinaryReader reader = new BinaryReader(stream);
 
+                if (reader.ReadByte() == 60)
+                {
+                    //assume we got a html page back with an error code so it's not a patchlist
+                    return;
+                }
+                reader.BaseStream.Seek(0,SeekOrigin.Begin);
                 int count = reader.ReadInt32();
 
                 for (int i = 0; i < count; i++)
@@ -192,31 +191,14 @@ namespace Launcher
 
             if (info == null || old.Length != info.Length || old.Creation != info.Creation)
             {
-                if (info != null && (Path.GetExtension(old.FileName).ToLower() == ".dll" || Path.GetExtension(old.FileName).ToLower() == ".exe"))
-                {
-                    string oldFilename = Path.Combine(Path.GetDirectoryName(old.FileName), ("Old__" + Path.GetFileName(old.FileName)));
-
-                    try
-                    {
-                        File.Move(Settings.P_Client + old.FileName, oldFilename);
-                    }
-                    catch (UnauthorizedAccessException ex)
-                    {
-                        SaveError(ex.ToString());
-                    }
-                    finally
-                    {
-                        //Might cause an infinite loop if it can never gain access
-                        Restart = true;
-                    }
-                }
-
                 DownloadList.Enqueue(old);
                 _totalBytes += old.Length;
             }
         }
 
-        public void Download(Download dl)
+        private int errorcount = 0;
+
+        public void DownloadFile(Download dl)
         {
             var info = dl.Info;
             string fileName = info.FileName.Replace(@"\", "/");
@@ -228,145 +210,156 @@ namespace Launcher
 
             try
             {
-                using (WebClient client = new WebClient())
+                HttpClientHandler httpClientHandler = new() { AllowAutoRedirect = true };
+                ProgressMessageHandler progressMessageHandler = new(httpClientHandler);
+
+                progressMessageHandler.HttpReceiveProgress += (_, args) =>
                 {
-                    client.DownloadProgressChanged += (o, e) =>
-                        {
-                            dl.CurrentBytes = e.BytesReceived;
-                        };
-                    client.DownloadDataCompleted += (o, e) =>
-                        {
-                            if (e.Error != null)
-                            {
-                                File.AppendAllText(@".\Error.txt",
-                                       string.Format("[{0}] {1}{2}", DateTime.Now, info.FileName + " could not be downloaded. (" + e.Error.Message + ")", Environment.NewLine));
-                                ErrorFound = true;
 
-                                BeginDownload();
-                            }
-                            else
-                            {
-                                _currentCount++;
-                                _completedBytes += dl.CurrentBytes;
-                                dl.CurrentBytes = 0;
-                                dl.Completed = true;
+                    dl.CurrentBytes = args.BytesTransferred;
 
-                                BeginDownload(); // Start next download, file IO can wait.
+                };
 
-                                byte[] raw = e.Result;
+                using (HttpClient client = new(progressMessageHandler))
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    client.DefaultRequestHeaders.AcceptCharset.Clear();
+                    client.DefaultRequestHeaders.AcceptCharset.Add(new StringWithQualityHeaderValue("utf-8"));
 
-                                if (info.Compressed > 0 && info.Compressed != info.Length)
-                                {
-                                    raw = Decompress(e.Result);
-                                }
-
-                                var fileName = Settings.P_Client + info.FileName;
-                                var dirName = Path.GetDirectoryName(fileName);
-                                if (!Directory.Exists(dirName))
-                                    Directory.CreateDirectory(dirName);
-
-                                File.WriteAllBytes(fileName, raw);
-                                File.SetLastWriteTime(fileName, info.Creation);
-                            }
-                        };
-
-                    if (Settings.P_NeedLogin) client.Credentials = new NetworkCredential(Settings.P_Login, Settings.P_Password);
-
+                    if (Settings.P_NeedLogin)
+                    {
+                        string authInfo = Settings.P_Login + ":" + Settings.P_Password;
+                        authInfo = Convert.ToBase64String(System.Text.Encoding.Default.GetBytes(authInfo));
+                        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authInfo);
+                    }
 
                     ActiveDownloads.Add(dl);
-                    client.DownloadDataAsync(new Uri(Settings.P_Host + fileName));
+
+                    var task = Task.Run(() => client.GetAsync(new Uri($"{Settings.P_Host}{fileName}"), HttpCompletionOption.ResponseHeadersRead));
+                    var response = task.Result;
+
+                    var task2 = Task.Run(() => response.Content.ReadAsByteArrayAsync());
+                    byte[] data = task2.Result;
+
+                    _currentCount++;
+                    _completedBytes += dl.CurrentBytes;
+                    dl.CurrentBytes = 0;
+                    dl.Completed = true;
+
+                    if (info.Compressed > 0 && info.Compressed != info.Length)
+                    {
+                        data = Functions.DecompressBytes(data);
+                    }
+
+                    var fileNameOut = Settings.P_Client + info.FileName;
+                    var dirName = Path.GetDirectoryName(fileNameOut);
+                    if (!Directory.Exists(dirName))
+                        Directory.CreateDirectory(dirName);
+
+                    //first remove the original file if needed
+                    string[] specialfiles = { ".dll", ".exe", ".pdb" };
+                    if (File.Exists(fileNameOut) && ( specialfiles.Contains( Path.GetExtension(fileNameOut).ToLower() )))
+                    {
+                        string oldFilename = Path.Combine(Path.GetDirectoryName(fileNameOut), ("Old__" + Path.GetFileName(fileNameOut)));
+
+                        try
+                        {
+                            //if there's another previous backup: delete it first
+                            if (File.Exists(oldFilename))
+                            {
+                                File.Delete(oldFilename);
+                            }
+                            File.Move(fileNameOut, oldFilename);
+                        }
+                        catch (UnauthorizedAccessException ex)
+                        {
+                            SaveError(ex.ToString());
+                            errorcount++;
+                            if (errorcount == 5)
+                                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.TooManyErrors));
+                            if (errorcount < 5)
+                                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.ErrorSavingFile) + fileNameOut);
+                        }
+                        catch (Exception ex)
+                        {
+                            SaveError(ex.ToString());
+                            errorcount++;
+                            if (errorcount == 5)
+                                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.TooManyErrors));
+                            if (errorcount < 5)
+                                MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.ErrorSavingFile) + fileNameOut);
+                        }
+                        finally
+                        {
+                            //Might cause an infinite loop if it can never gain access
+                            Restart = true;
+                        }
+                    }
+
+                    File.WriteAllBytes(fileNameOut, data);
+                    File.SetLastWriteTime(fileNameOut, info.Creation);
                 }
             }
-            catch
+            catch (HttpRequestException e)
             {
-                MessageBox.Show(string.Format("Failed to download file: {0}", fileName));
+                File.AppendAllText(@".\Error.txt",
+                                       $"[{DateTime.Now}] {info.FileName} could not be downloaded. ({e.Message}) {Environment.NewLine}");
+                ErrorFound = true;
             }
+            catch (Exception ex)
+            {
+                SaveError(ex.ToString());
+                errorcount++;
+                if (errorcount == 5)
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.TooManyErrors));
+                if (errorcount < 5)
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.ErrorSavingFile) + dl.Info.FileName);
+            }
+            finally
+            {
+                if (ErrorFound)
+                {
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization((ClientTextKeys.FileDownload_Failure), fileName));
+                }
+            }
+
+            BeginDownload();
         }
 
         public byte[] Download(string fileName)
         {
-            string authInfo = Settings.P_Login + ":" + Settings.P_Password;
-            authInfo = Convert.ToBase64String(System.Text.Encoding.Default.GetBytes(authInfo));
-
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Settings.P_Host + Path.ChangeExtension(fileName, ".gz"));
-            request.Method = "GET";
-            request.Accept = "application/json; charset=utf-8";
-
-            if (Settings.P_NeedLogin)
-                request.Headers["Authorization"] = "Basic " + authInfo;
-
-            var response = (HttpWebResponse)request.GetResponse();
-
-            MemoryStream ms = new MemoryStream();
-            response.GetResponseStream().CopyTo(ms);
-
-            byte[] data = ms.ToArray();
-
-            return data;
-        }
-
-        //Seems to want to cache the PList when using WebClient, so causes issues. No longer used.
-        public byte[] DownloadOld(string fileName)
-        {
-            fileName = fileName.Replace(@"\", "/");
-
-            if (fileName != "PList.gz")
-                fileName += Path.GetExtension(fileName);
-
-            try
+            using (HttpClient client = new())
             {
-                using WebClient client = new WebClient();
-
-                client.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                client.DefaultRequestHeaders.AcceptCharset.Clear();
+                client.DefaultRequestHeaders.AcceptCharset.Add(new StringWithQualityHeaderValue("utf-8"));
 
                 if (Settings.P_NeedLogin)
                 {
-                    client.Credentials = new NetworkCredential(Settings.P_Login, Settings.P_Password);
+                    string authInfo = Settings.P_Login + ":" + Settings.P_Password;
+                    authInfo = Convert.ToBase64String(System.Text.Encoding.Default.GetBytes(authInfo));
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authInfo);
+                }
+
+                string uriString = Settings.P_Host + Path.ChangeExtension(fileName, ".gz");
+
+                if (Uri.IsWellFormedUriString(uriString, UriKind.Absolute))
+                {
+                    var task = Task.Run(() => client.GetAsync(new Uri(uriString), HttpCompletionOption.ResponseHeadersRead));
+                    var response = task.Result;
+                    using Stream sm = response.Content.ReadAsStream();
+                    using MemoryStream ms = new();
+                    sm.CopyTo(ms);
+                    byte[] data = ms.ToArray();
+                    return data;
                 }
                 else
                 {
-                    client.Credentials = new NetworkCredential("", "");
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.LauncherHostSettingFormatError), GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.BadHostFormat));
+                    return null;
                 }
-
-                var rand = new Random(1000).Next();
-
-                return client.DownloadData(Settings.P_Host + Path.ChangeExtension(fileName, ".gz") + $"?rand={rand}");
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        public static byte[] Decompress(byte[] raw)
-        {
-            using (GZipStream gStream = new GZipStream(new MemoryStream(raw), CompressionMode.Decompress))
-            {
-                const int size = 4096; //4kb
-                byte[] buffer = new byte[size];
-                using (MemoryStream mStream = new MemoryStream())
-                {
-                    int count;
-                    do
-                    {
-                        count = gStream.Read(buffer, 0, size);
-                        if (count > 0)
-                        {
-                            mStream.Write(buffer, 0, count);
-                        }
-                    } while (count > 0);
-                    return mStream.ToArray();
-                }
-            }
-        }
-
-        public static byte[] Compress(byte[] raw)
-        {
-            using (MemoryStream mStream = new MemoryStream())
-            {
-                using (GZipStream gStream = new GZipStream(mStream, CompressionMode.Compress, true))
-                    gStream.Write(raw, 0, raw.Length);
-                return mStream.ToArray();
             }
         }
 
@@ -390,8 +383,15 @@ namespace Launcher
 
             if (Settings.P_BrowserAddress != "")
             {
-                Main_browser.NavigationCompleted += Main_browser_NavigationCompleted;
-                Main_browser.Source = new Uri(Settings.P_BrowserAddress);
+                if (Uri.IsWellFormedUriString(Settings.P_BrowserAddress, UriKind.Absolute))
+                {
+                    Main_browser.NavigationCompleted += Main_browser_NavigationCompleted;
+                    Main_browser.Source = new Uri(Settings.P_BrowserAddress);
+                }
+                else
+                {
+                    MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.LauncherBrowserFormatError), GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.BadBrowserFormat));
+                }
             }
 
             RepairOldFiles();
@@ -424,10 +424,9 @@ namespace Launcher
         private void Launch()
         {
             if (ConfigForm.Visible) ConfigForm.Visible = false;
-            Program.Form = new CMain();
-            Program.Form.Closed += (s, args) => this.Close();
-            Program.Form.Show();
-            Program.PForm.Hide();
+
+            Program.Launch = true;
+            Close();
         }
 
         private void Close_pb_Click(object sender, EventArgs e)
@@ -543,11 +542,10 @@ namespace Launcher
         {
             try
             {
-                if (Completed)
+                if (Completed && ActiveDownloads.Count == 0)
                 {
-                    
                     ActionLabel.Text = "";
-                    CurrentFile_label.Text = "Up to date.";
+                    CurrentFile_label.Text = GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.UpToDate);
                     SpeedLabel.Text = "";
                     ProgressCurrent_pb.Width = 550;
                     TotalProg_pb.Width = 550;
@@ -558,20 +556,18 @@ namespace Launcher
                     TotalPercent_label.Text = "100%";
                     InterfaceTimer.Enabled = false;
                     Launch_pb.Enabled = true;
-                    if (ErrorFound) MessageBox.Show("One or more files failed to download, check Error.txt for details.", "Failed to Download.");
+                    if (ErrorFound) MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.FilesDownloadFailed), GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.DownloadFailed));
                     ErrorFound = false;
 
                     if (CleanFiles)
                     {
                         CleanFiles = false;
-                        MessageBox.Show("Your files have been cleaned up.", "Clean Files");
+                        MessageBox.Show(GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.YourFilesCleanedUp), GameLanguage.ClientTextMap.GetLocalization(ClientTextKeys.CleanFiles));
                     }
 
                     if (Restart)
                     {
                         Program.Restart = true;
-
-                        MoveOldFilesToCurrent();
 
                         Close();
                     }
@@ -583,7 +579,7 @@ namespace Launcher
                     return;
                 }
 
-                var currentBytes = 0l;
+                var currentBytes = 0L;
                 FileInformation currentFile = null;
 
                 // Remove completed downloads..
@@ -608,7 +604,7 @@ namespace Launcher
                 if (Settings.P_Concurrency == 1)
                 {
                     // Note: Just mimic old behaviour for now until a better UI is done.
-                    if  (ActiveDownloads.Count > 0)
+                    if (ActiveDownloads.Count > 0)
                         currentFile = ActiveDownloads[0].Info;
                 }
 
@@ -618,10 +614,8 @@ namespace Launcher
                 CurrentPercent_label.Visible = true;
                 TotalPercent_label.Visible = true;
 
-                if (LabelSwitch) ActionLabel.Text = string.Format("{0} Files Remaining", _fileCount - _currentCount);
-                else ActionLabel.Text = string.Format("{0:#,##0}MB Remaining",  ((_totalBytes) - (_completedBytes + currentBytes)) / 1024 / 1024);
-
-                //ActionLabel.Text = string.Format("{0:#,##0}MB / {1:#,##0}MB", (_completedBytes + _currentBytes) / 1024 / 1024, _totalBytes / 1024 / 1024);
+                if (LabelSwitch) ActionLabel.Text = GameLanguage.ClientTextMap.GetLocalization((ClientTextKeys.FilesRemaining), _fileCount - _currentCount);
+                else ActionLabel.Text = GameLanguage.ClientTextMap.GetLocalization((ClientTextKeys.MBRemaining), ((_totalBytes) - (_completedBytes + currentBytes)) / 1024 / 1024);
 
                 if (Settings.P_Concurrency > 1)
                 {
@@ -632,22 +626,23 @@ namespace Launcher
                 {
                     if (currentFile != null)
                     {
-                        //FileLabel.Text = string.Format("{0}, ({1:#,##0} MB) / ({2:#,##0} MB)", currentFile.FileName, _currentBytes / 1024 / 1024, currentFile.Compressed / 1024 / 1024);
                         CurrentFile_label.Text = string.Format("{0}", currentFile.FileName);
                         SpeedLabel.Text = ToSize(currentBytes / _stopwatch.Elapsed.TotalSeconds);
                         CurrentPercent_label.Text = ((int)(100 * currentBytes / currentFile.Length)).ToString() + "%";
                         ProgressCurrent_pb.Width = (int)(5.5 * (100 * currentBytes / currentFile.Length));
                     }
                 }
+
                 if (!(_completedBytes is 0 && currentBytes is 0 && _totalBytes is 0))
                 {
                     TotalProg_pb.Width = (int)(5.5 * (100 * (_completedBytes + currentBytes) / _totalBytes));
                     TotalPercent_label.Text = ((int)(100 * (_completedBytes + currentBytes) / _totalBytes)).ToString() + "%";
                 }
+
             }
-            catch (Exception ex)
+            catch
             {
-                
+                //to-do 
             }
 
         }
@@ -671,6 +666,9 @@ namespace Launcher
         private void AMain_FormClosed(object sender, FormClosedEventArgs e)
         {
             MoveOldFilesToCurrent();
+
+            Launch_pb?.Dispose();
+            Close_pb?.Dispose();
         }
 
         private static string[] suffixes = new[] { " B", " KB", " MB", " GB", " TB", " PB" };
